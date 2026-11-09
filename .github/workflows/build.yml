@@ -1,0 +1,30 @@
+name: Build Amethyst IPA (Dopamine UI)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply Dopamine UI overlay
+        run: unzip -o dopamine-ui-overlay.zip
+
+      - name: Install ldid
+        run: brew install ldid
+
+      - name: Build IPA
+        run: |
+          cd Amethyst
+          chmod +x buildipa.sh
+          ./buildipa.sh
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Amethyst-DopamineUI-unsigned
+          path: Amethyst/Amethyst.ipa
+          if-no-files-found: error
