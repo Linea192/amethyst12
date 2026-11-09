@@ -16,13 +16,16 @@ jobs:
       - name: Install ldid
         run: brew install ldid
 
+      - name: Show schemes (debug info)
+        run: cd Amethyst && xcodebuild -list
+
       - name: Build IPA
         run: |
           cd Amethyst
           chmod +x buildipa.sh
           ./buildipa.sh
 
-      - name: Upload IPA
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: Amethyst-DopamineUI-unsigned
