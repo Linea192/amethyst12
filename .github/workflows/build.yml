@@ -10,7 +10,61 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Apply Dopamine UI overlayaaname: Build Amethyst IPA (Dopamine UI)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Environment info
+        run: |
+          xcodebuild -version
+          xcode-select -p
+          xcodebuild -showsdks | head -20 || true
+
       - name: Apply Dopamine UI overlay
+        run: unzip -o dopamine-ui-overlay.zip
+
+      - name: Install ldid
+        run: brew install ldid
+
+      - name: Build IPA
+        run: |
+          cd Amethyst
+          chmod +x buildipa.sh
+          ./buildipa.sh
+
+      - name: Show errors on run page (if failed)
+        if: failure()
+        run: |
+          {
+            echo "## Build failed — error lines"
+            echo '```'
+            grep -E "error:|Error:|FAILED" Amethyst/xcodebuild.log | tail -40 || echo "no error lines found in log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: Amethyst/xcodebuild.log
+          if-no-files-found: ignore
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Amethyst-DopamineUI-unsigned
+          path: Amethyst/Amethyst.ipa
+          if-no-files-found: error
+
         run: unzip -o dopamine-ui-overlay.zip
 
       - name: Install ldid
