@@ -2,6 +2,12 @@ name: Build Amethyst IPA
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -25,9 +31,63 @@ jobs:
         if: failure()
         run: grep -E "error:" Amethyst/xcodebuild.log | tail -40 || true
 
-      - name: Upload IPA
+      - name: Upload IPA (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: TessXract-unsigned
           path: Amethyst/TessXract.ipa
           if-no-files-found: error
+
+      # ------------------------------------------------------------------
+      # Auto-release: when the build above succeeds, publish the IPA as a
+      # GitHub Release so it can be installed straight from the Releases
+      # page (no need to dig into the run's artifacts).
+      #
+      # Version naming:
+      #   - Tag push (v1.2)          -> release "v1.2"
+      #   - Manual "Run workflow"    -> release "v1.1-20251111-abc1234"
+      #     (app version + date + commit)
+      # ------------------------------------------------------------------
+      - name: Release the IPA
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+
+          APP_VERSION="$(sed -n 's/^.*MARKETING_VERSION = \([^;]*\);.*$/\1/p' Amethyst/Amethyst.xcodeproj/project.pbxproj | head -1)"
+          if [ -z "$APP_VERSION" ]; then APP_VERSION="0.0"; fi
+
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="v${APP_VERSION}-$(date -u +%Y%m%d)-${GITHUB_SHA:0:7}"
+          fi
+          echo "Release tag: $TAG"
+
+          cat > release-notes.md <<EOF
+          Automatic build of the TessXract IPA
+          (Amethyst jailbreak core by staturnz + Dopamine UI by opa334/tomt000).
+
+          - App version: ${APP_VERSION}
+          - Built from commit ${GITHUB_SHA:0:7} on $(date -u '+%Y-%m-%d %H:%M UTC')
+          - Supported devices: iOS 12.0 - 13.7, arm64 (A8 - A13)
+
+          The IPA is **unsigned**:
+          - Jailbroken device: install AppSync Unified, then install the IPA
+            with Filza.
+          - Not jailbroken: sign it with PlumeImpactor on any computer
+            (re-signing needed every 7 days on free accounts).
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - uploading the new IPA to it"
+            gh release upload "$TAG" Amethyst/TessXract.ipa --clobber
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "TessXract $TAG" \
+              --notes-file release-notes.md \
+              --latest \
+              Amethyst/TessXract.ipa
+          fi
